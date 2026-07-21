@@ -23,7 +23,8 @@ router.post("/signup", async (req, res) => {
   }
 
   try {
-    const existing = await db.select().from(usersTable).where(eq(usersTable.email, email.toLowerCase())).limit(1);
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await db.select().from(usersTable).where(eq(usersTable.email, cleanEmail)).limit(1);
     if (existing.length > 0) {
       res.status(409).json({ error: "conflict", message: "An account with this email already exists." });
       return;
@@ -35,24 +36,30 @@ router.post("/signup", async (req, res) => {
 
     const [user] = await db.insert(usersTable).values({
       name: name.trim(),
-      email: email.toLowerCase().trim(),
+      email: cleanEmail,
       passwordHash,
       verifyToken,
       verifyTokenExpiry,
     }).returning();
 
+    const verifyUrl = `${getAppUrl()}/verify?token=${verifyToken}`;
+
     try {
       await sendVerificationEmail(user.email, user.name, verifyToken);
       logger.info({ email: user.email }, "signup: verification email dispatched");
     } catch (emailErr) {
-      const verifyUrl = `${getAppUrl()}/verify?token=${verifyToken}`;
       logger.error({ err: emailErr, email: user.email, verifyUrl }, "signup: email send failed — link below");
     }
 
-    res.status(201).json({ message: "Account created. Please check your email to verify your identity." });
-  } catch (err) {
+    const isDev = process.env.NODE_ENV !== "production";
+    res.status(201).json({
+      message: "Account created. Please check your email to verify your identity.",
+      verifyToken: isDev ? verifyToken : undefined,
+      devVerifyUrl: isDev ? verifyUrl : undefined,
+    });
+  } catch (err: any) {
     logger.error({ err }, "signup: failed");
-    res.status(500).json({ error: "internal", message: "Signup failed. Please try again." });
+    res.status(500).json({ error: "internal", message: err?.message || "Signup failed. Please try again." });
   }
 });
 

@@ -1,8 +1,12 @@
 import { logger } from "./logger.js";
 
-const BREVO_API_KEY = process.env.BREVO_API_KEY;
-const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || "noreply@sentrascopeapp.com";
-const BREVO_FROM_NAME = process.env.BREVO_FROM_NAME || "SentraScope";
+function getBrevoConfig() {
+  return {
+    apiKey: process.env.BREVO_API_KEY,
+    fromEmail: process.env.BREVO_FROM_EMAIL || "noreply@sentrascopeapp.com",
+    fromName: process.env.BREVO_FROM_NAME || "SentraScope",
+  };
+}
 
 export function getAppUrl(): string {
   if (process.env.APP_URL) return process.env.APP_URL;
@@ -10,15 +14,18 @@ export function getAppUrl(): string {
 }
 
 async function brevoSend(opts: { to: string; toName?: string; subject: string; html: string; text: string }): Promise<void> {
+  const { apiKey, fromEmail, fromName } = getBrevoConfig();
+  if (!apiKey) return;
+
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
       "accept": "application/json",
-      "api-key": BREVO_API_KEY!,
+      "api-key": apiKey,
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      sender: { name: BREVO_FROM_NAME, email: BREVO_FROM_EMAIL },
+      sender: { name: fromName, email: fromEmail },
       to: [{ email: opts.to, name: opts.toName ?? opts.to }],
       subject: opts.subject,
       htmlContent: opts.html,
@@ -34,18 +41,24 @@ async function brevoSend(opts: { to: string; toName?: string; subject: string; h
 }
 
 export async function sendEmail(opts: { to: string; subject: string; html: string; text: string }): Promise<void> {
-  if (!BREVO_API_KEY) {
+  const { apiKey } = getBrevoConfig();
+  if (!apiKey) {
     logger.warn({ to: opts.to, subject: opts.subject }, "BREVO_API_KEY not set — email skipped (dry-run)");
     return;
   }
-  await brevoSend(opts);
+  try {
+    await brevoSend(opts);
+  } catch (err: any) {
+    logger.warn({ err: err?.message, to: opts.to }, "Brevo dispatch failed — email skipped");
+  }
 }
 
 export async function sendVerificationEmail(to: string, name: string, token: string): Promise<void> {
   const APP_URL = getAppUrl();
   const verifyUrl = `${APP_URL}/verify?token=${token}`;
+  const { apiKey } = getBrevoConfig();
 
-  if (!BREVO_API_KEY) {
+  if (!apiKey) {
     logger.warn({ to, verifyUrl }, "BREVO_API_KEY not set — verification link (dry-run)");
     return;
   }
@@ -213,20 +226,26 @@ export async function sendVerificationEmail(to: string, name: string, token: str
 </body>
 </html>`;
 
-  await brevoSend({
-    to,
-    toName: name,
-    subject: "SentraScope — Authorize your station access",
-    html,
-    text: `Hi ${name},\n\nAuthorize your SentraScope station by visiting this link:\n${verifyUrl}\n\nThis link expires in 24 hours. If you didn't sign up, ignore this email.\n\n© 2026 SentraScope — Engineered in India`,
-  });
+  try {
+    await brevoSend({
+      to,
+      toName: name,
+      subject: "SentraScope — Authorize your station access",
+      html,
+      text: `Hi ${name},\n\nAuthorize your SentraScope station by visiting this link:\n${verifyUrl}\n\nThis link expires in 24 hours. If you didn't sign up, ignore this email.\n\n© 2026 SentraScope — Engineered in India`,
+    });
+  } catch (err: any) {
+    logger.warn({ to, verifyUrl, err: err?.message }, "sendVerificationEmail: Brevo dispatch failed — verification link logged above");
+  }
 }
 
 export async function sendPasswordResetEmail(to: string, name: string, token: string): Promise<void> {
   const APP_URL = getAppUrl();
   const resetUrl = `${APP_URL}/reset-password?token=${token}`;
 
-  if (!BREVO_API_KEY) {
+  const { apiKey } = getBrevoConfig();
+
+  if (!apiKey) {
     logger.warn({ to, resetUrl }, "BREVO_API_KEY not set — password reset link (dry-run)");
     return;
   }
@@ -386,11 +405,15 @@ export async function sendPasswordResetEmail(to: string, name: string, token: st
 </body>
 </html>`;
 
-  await brevoSend({
-    to,
-    toName: name,
-    subject: "SentraScope — Reset your access key",
-    html,
-    text: `Hi ${name},\n\nReset your SentraScope password by visiting:\n${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.\n\n© 2026 SentraScope — Engineered in India`,
-  });
+  try {
+    await brevoSend({
+      to,
+      toName: name,
+      subject: "SentraScope — Reset your access key",
+      html,
+      text: `Hi ${name},\n\nReset your SentraScope password by visiting:\n${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.\n\n© 2026 SentraScope — Engineered in India`,
+    });
+  } catch (err: any) {
+    logger.warn({ to, resetUrl, err: err?.message }, "sendPasswordResetEmail: Brevo dispatch failed — reset link logged above");
+  }
 }
