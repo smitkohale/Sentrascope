@@ -114,11 +114,15 @@ try {
   data = {};
 }
 
-if (response.ok) {
-  setLocation(`/verify?email=${encodeURIComponent(email)}`);
-} else {
-  throw new Error(data.message || "Registry failed.");
-}
+      if (response.ok) {
+        if (data.verifyToken) {
+          setLocation(`/verify?token=${encodeURIComponent(data.verifyToken)}`);
+        } else {
+          setLocation(`/verify?email=${encodeURIComponent(email)}`);
+        }
+      } else {
+        throw new Error(data.message || "Registry failed.");
+      }
     } catch (err: any) {
       setError(err.message || "Connection to secure network failed.");
     } finally {
