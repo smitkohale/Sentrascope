@@ -51,7 +51,11 @@ export function VerifyPage() {
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
-      setResendMsg(data.message || "New link dispatched.");
+      if (data.verifyToken) {
+        setLocation(`/verify?token=${encodeURIComponent(data.verifyToken)}`);
+      } else {
+        setResendMsg(data.message || "New link dispatched.");
+      }
     } catch {
       setResendMsg("Failed to resend. Please try again.");
     } finally {
