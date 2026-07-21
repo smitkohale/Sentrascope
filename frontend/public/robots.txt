@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Allow: /about
+Allow: /privacy
+Allow: /ethics
+Allow: /urbanization
+Allow: /login
+Allow: /signup
+Disallow: /dashboard
+Disallow: /alerts
+Disallow: /profile
+Disallow: /urbanization/dashboard
+Disallow: /reset-password
+Disallow: /verify
+Disallow: /api/

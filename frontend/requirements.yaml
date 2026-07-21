@@ -1,0 +1,16 @@
+packages:
+  "recharts": "Data visualization for environmental metrics"
+  "date-fns": "Human-readable date formatting for timestamps"
+  "framer-motion": "Smooth animations for dashboard panels"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility function to efficiently merge Tailwind CSS classes"
+  "@radix-ui/react-slot": "Primitive for composition in UI components"
+
+images:
+  - path: "frontend/public/images/tech-bg.png"
+    description: "Deep navy and teal abstract glowing particle map of India, cyberpunk intelligence dashboard style, highly detailed, dark mode"
+    aspect_ratio: "16:9"
+
+notes:
+  - Assumes backend is running and proxying to external APIs via /api/*
+  - Generates UI expecting Orval-generated hooks from @workspace/api-client-react
