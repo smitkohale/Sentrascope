@@ -27,10 +27,18 @@ Real-time air quality, thermal fire hotspots, UV index, and urbanization analysi
 |---|---|---|
 | Node.js | 20+ | https://nodejs.org |
 | pnpm | 9+ | `npm install -g pnpm` |
-| PostgreSQL | 14+ | Docker (recommended) or native |
-| Docker | any | https://docker.com *(optional, for Postgres)* |
+| Supabase account | free tier | https://supabase.com |
 
-### 1. Run the automated setup
+### 1. Create a Supabase project
+
+1. Sign up at https://supabase.com and create a new project (free tier is fine).
+2. Once the project is ready, open **Project Settings → Database → Connection string** and copy the **Direct connection** URI (port 5432 — *not* the pooler 6543). It looks like:
+   ```
+   postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
+   ```
+3. Open **SQL Editor → New query**, paste the contents of `database/supabase-init.sql`, and click **Run**. This creates the `users` and `alert_settings` tables. (Idempotent — safe to re-run.)
+
+### 2. Run the automated setup
 
 ```bash
 chmod +x setup.sh
@@ -39,18 +47,16 @@ chmod +x setup.sh
 
 This will:
 - Copy `.env.example` → `.env`
-- Start PostgreSQL via Docker Compose
 - Install all dependencies
 - Build shared libraries
-- Run database migrations
 
-### 2. Fill in your API keys
+### 3. Fill in your keys
 
-Open `.env` and add your keys (see the [API Keys](#api-keys) section below):
+Open `.env` and add:
 
 ```bash
-# Required
-DATABASE_URL=postgresql://sentrascope:sentrascope@localhost:5432/sentrascope
+# Required — Supabase direct connection string from step 1
+DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
 SESSION_SECRET=your-long-random-secret-here
 
 # Optional (app works without these, features degrade gracefully)
@@ -58,15 +64,15 @@ WAQI_API_TOKEN=
 NASA_FIRMS_MAP_KEY=
 OPENUV_API_KEY=
 INDIA_OGD_API_KEY=
-BREVO_API_KEY=
+BREVO_API_KEY=        # used for verification + password-reset + report emails (NOT for auth)
 ```
 
-### 3. Start the servers
+### 4. Start the servers
 
 Open **two terminals**:
 
 ```bash
-# Terminal 1 — API server (port 8080)
+# Terminal 1 — API server (port 5000 by default; PORT in .env)
 pnpm --filter @workspace/api-server run dev
 
 # Terminal 2 — Frontend (port 5173)
@@ -81,14 +87,16 @@ Then open **http://localhost:5173** in your browser.
 
 All keys are **optional** except `DATABASE_URL` and `SESSION_SECRET`.
 
-| Key | Where to get it | Free tier? |
+| Key | Where to get it | Used for |
 |---|---|---|
-| `WAQI_API_TOKEN` | https://aqicn.org/api/ | ✅ Free |
-| `NASA_FIRMS_MAP_KEY` | https://firms.modaps.eosdis.nasa.gov/api/ | ✅ Free |
-| `OPENUV_API_KEY` | https://www.openuv.io/ | ✅ Free (50 req/day) |
-| `INDIA_OGD_API_KEY` | https://data.gov.in/ | ✅ Free |
-| `BREVO_API_KEY` | https://brevo.com | ✅ Free (300 emails/day) |
-| `GEE_SERVICE_ACCOUNT_KEY` | https://earthengine.google.com | ✅ Free (approval required) |
+| `DATABASE_URL` | Supabase dashboard → Database → Connection string | Stores users + alert settings (replaces the old local Postgres) |
+| `SESSION_SECRET` | `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` | JWT signing key |
+| `WAQI_API_TOKEN` | https://aqicn.org/api/ | Air quality data — free |
+| `NASA_FIRMS_MAP_KEY` | https://firms.modaps.eosdis.nasa.gov/api/ | Thermal fire hotspots — free |
+| `OPENUV_API_KEY` | https://www.openuv.io/ | UV index — free (50 req/day) |
+| `INDIA_OGD_API_KEY` | https://data.gov.in/ | CPCB air quality — free |
+| `BREVO_API_KEY` | https://brevo.com | Transactional email (verification, password reset, scheduled reports) — free (300 emails/day). Independent of Supabase — this project uses its own custom auth, not Supabase Auth. |
+| `GEE_SERVICE_ACCOUNT_KEY` | https://earthengine.google.com | Urbanization — free (approval required) |
 
 ---
 
@@ -101,21 +109,21 @@ sentrascope/
 │       ├── components/      # UI components
 │       ├── pages/           # Route pages
 │       └── hooks/           # Data fetching hooks
-├── backend/                 # Express API (port 8080)
+├── backend/                 # Express API (port 5000)
 │   └── src/
 │       ├── routes/          # All API endpoints
 │       ├── lib/             # JWT, email, scheduler, etc.
 │       ├── app.ts           # Express app setup
 │       └── index.ts         # Entry point
-├── database/                 # PostgreSQL + Drizzle ORM
-│   └── src/schema/          # DB schema definitions
+├── database/                 # Drizzle ORM schemas (mirrors Supabase tables)
+│   ├── src/schema/          # Drizzle schema definitions
+│   └── supabase-init.sql    # Run once in Supabase SQL editor to create tables
 ├── shared/
 │   ├── api-spec/            # OpenAPI spec (source of truth)
 │   ├── api-zod/             # Generated Zod validators
 │   └── api-client-react/    # Generated React Query hooks
 ├── mockup-sandbox/          # Design/prototype sandbox
 ├── scripts/                 # Dev/maintenance scripts
-├── docker-compose.yml       # Local PostgreSQL
 ├── .env.example             # Environment variable template
 └── setup.sh                 # Automated setup script
 ```
@@ -151,7 +159,7 @@ pnpm run typecheck:libs
 # Regenerate API hooks + Zod schemas from OpenAPI spec
 pnpm --filter @workspace/api-spec run codegen
 
-# Push DB schema changes (dev only)
+# Apply Drizzle schema changes to Supabase (dev only)
 pnpm --filter @workspace/db run push
 
 # Full typecheck across all packages
@@ -171,7 +179,7 @@ Set these in your hosting provider's secrets/env settings:
 
 ```bash
 NODE_ENV=production
-DATABASE_URL=postgresql://...
+DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
 SESSION_SECRET=<64-char random string>
 APP_URL=https://yourdomain.com
 # ... other API keys
@@ -196,7 +204,7 @@ pnpm --filter @workspace/api-server run start
 → The respective API key is missing. The app runs in degraded mode — add the key to `.env`.
 
 **"Cannot connect to database"**  
-→ Make sure PostgreSQL is running (`docker compose up -d postgres`) and `DATABASE_URL` is correct.
+→ Check `DATABASE_URL` in `.env`. It must be the Supabase **direct** connection string (port 5432), not the transaction pooler. Confirm the project isn't paused in the Supabase dashboard.
 
 **Email verification not working**  
 → Add `BREVO_API_KEY` to `.env`. Without it, verification links are printed to the API server console log.
@@ -208,9 +216,11 @@ pnpm --filter @workspace/api-server run start
 
 ## Stack
 
-- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Leaflet maps
+- **Frontend**: React 19, Vite, TypeScript, Tailwind CSS, Leaflet maps
 - **Backend**: Express 5, Node.js 20+, TypeScript
-- **Database**: PostgreSQL 16 + Drizzle ORM
+- **Database**: Supabase (PostgreSQL 15) + Drizzle ORM via `postgres.js`
+- **Auth**: Custom email + password (bcrypt) with our own JWT — Supabase stores the rows, not the auth
+- **Email**: Brevo for transactional + report emails
 - **Validation**: Zod + drizzle-zod
 - **API**: OpenAPI spec → Orval codegen → React Query hooks + Zod schemas
 - **Monorepo**: pnpm workspaces

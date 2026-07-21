@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 dotenv.config();
-dotenv.config({ path: path.resolve(__dirname, "../../../.env"), override: false });
+dotenv.config({ path: path.resolve(__dirname, "../../.env"), override: false });
 
 const rawPort = process.env["PORT"];
 
@@ -20,18 +20,13 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 async function start() {
-  const [{ default: app, logger }, { runMigrations }, { startReportScheduler }] = await Promise.all([
+  const [{ default: app, logger }, { startReportScheduler }] = await Promise.all([
     import("./app.js"),
-    import("@workspace/db"),
     import("./lib/report-scheduler.js"),
   ]);
 
-  try {
-    await runMigrations();
-    logger.info("database migrations complete");
-  } catch (err) {
-    logger.warn({ err: (err as Error).message }, "database not available — running without DB");
-  }
+  // Schema is owned by Supabase. See database/supabase-init.sql — run it once
+  // in the Supabase SQL editor. The backend just connects to the live DB.
 
   app.listen(port, () => {
     logger.info({ port }, "server listening");
