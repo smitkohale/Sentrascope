@@ -154,15 +154,21 @@ router.post("/resend-verify", async (req, res) => {
 
     await db.update(usersTable).set({ verifyToken, verifyTokenExpiry }).where(eq(usersTable.id, user.id));
 
+    const verifyUrl = `${getAppUrl()}/verify?token=${verifyToken}`;
+
     try {
       await sendVerificationEmail(user.email, user.name, verifyToken);
       logger.info({ email: user.email }, "resend-verify: email dispatched");
     } catch (emailErr) {
-      const verifyUrl = `${getAppUrl()}/verify?token=${verifyToken}`;
       logger.error({ err: emailErr, email: user.email, verifyUrl }, "resend-verify: email send failed — link below");
     }
 
-    res.json({ message: "A new verification link has been dispatched." });
+    const isDev = process.env.NODE_ENV !== "production";
+    res.json({
+      message: "A new verification link has been dispatched.",
+      verifyToken: isDev ? verifyToken : undefined,
+      devVerifyUrl: isDev ? verifyUrl : undefined,
+    });
   } catch (err) {
     logger.error({ err }, "resend-verify: failed");
     res.status(500).json({ error: "internal", message: "Failed to resend. Please try again." });
